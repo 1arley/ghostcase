@@ -1,0 +1,57 @@
+{
+  "directed": false,
+  "multigraph": false,
+  "graph": {},
+  "nodes": [
+    {
+      "id": "src_main",
+      "label": "main.rs",
+      "_origin": "ast",
+      "community": 0,
+      "community_name": "Community 0",
+      "file_type": "code",
+      "norm_label": "main.rs",
+      "source_file": "src/main.rs",
+      "source_location": "L1"
+    },
+    {
+      "id": "src_main_main",
+      "label": "main()",
+      "_origin": "ast",
+      "community": 0,
+      "community_name": "Community 0",
+      "file_type": "code",
+      "norm_label": "main()",
+      "source_file": "src/main.rs",
+      "source_location": "L1"
+    },
+    {
+      "id": "pkg_idk7",
+      "label": "idk7",
+      "_origin": "ast",
+      "community": 1,
+      "community_name": "Community 1",
+      "ecosystem": "cargo",
+      "file_type": "code",
+      "norm_label": "idk7",
+      "source_file": "Cargo.toml",
+      "source_location": "L1",
+      "type": "package",
+      "version": "0.1.0"
+    }
+  ],
+  "links": [
+    {
+      "source": "src_main",
+      "target": "src_main_main",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/main.rs",
+      "source_location": "L1",
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": []
+}

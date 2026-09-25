@@ -1,0 +1,14 @@
+{
+  "Cargo.toml": {
+    "mtime": 1790340259.3895612,
+    "seen": 1790340294.2146156,
+    "ast_hash": "777524bbc3be371d9fded0eacaff2585",
+    "semantic_hash": "777524bbc3be371d9fded0eacaff2585"
+  },
+  "src/main.rs": {
+    "mtime": 1790340259.3895612,
+    "seen": 1790340294.2146199,
+    "ast_hash": "b64abcb167a8b9dd4f282813c31ad0da",
+    "semantic_hash": "b64abcb167a8b9dd4f282813c31ad0da"
+  }
+}

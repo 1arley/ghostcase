@@ -1,0 +1,30 @@
+{
+  "communities": {
+    "0": [
+      "src_main",
+      "src_main_main"
+    ],
+    "1": [
+      "pkg_idk7"
+    ]
+  },
+  "cohesion": {
+    "0": 1.0,
+    "1": 1.0
+  },
+  "gods": [
+    {
+      "id": "pkg_idk7",
+      "label": "idk7",
+      "degree": 0
+    }
+  ],
+  "surprises": [],
+  "questions": [
+    {
+      "type": "isolated_nodes",
+      "question": "What connects `idk7` to the rest of the system?",
+      "why": "1 weakly-connected nodes found - possible documentation gaps or missing edges."
+    }
+  ]
+}
