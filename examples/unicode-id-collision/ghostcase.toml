@@ -1,0 +1,15 @@
+target = "unicode-id-collision"
+max_runs = 100
+timeout_seconds = 10
+
+[oracle]
+program = "python3"
+args = ["oracle.py", "--input", "{input}"]
+
+[[replacements]]
+path = "/records/0/id"
+with = "EXAMPLE-\u00c9-USER"
+
+[[replacements]]
+path = "/records/1/id"
+with = "EXAMPLE-E\u0301-USER"

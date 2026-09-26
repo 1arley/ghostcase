@@ -1,0 +1,28 @@
+{
+  "source": "customer-export",
+  "metadata": {
+    "account": "customer-account-secret",
+    "created_at": "2026-09-25T12:00:00Z",
+    "format": "profile-v3"
+  },
+  "records": [
+    {
+      "id": "José-001",
+      "name": "José Customer",
+      "email": "customer-email-secret",
+      "unused": {"note": "private note"}
+    },
+    {
+      "id": "Jose\u0301-001",
+      "name": "Jose Customer",
+      "email": "customer-email-secret",
+      "unused": {"note": "another private note"}
+    },
+    {
+      "id": "unrelated-002",
+      "name": "Unrelated Record",
+      "email": "other@example.invalid"
+    }
+  ],
+  "unused_settings": {"retry_count": 8, "debug": true}
+}

@@ -1,0 +1,15 @@
+target = "import-duplicate-id"
+max_runs = 100
+timeout_seconds = 10
+
+[oracle]
+program = "python3"
+args = ["oracle.py", "--input", "{input}"]
+
+[[replacements]]
+path = "/records/0/id"
+with = "EXAMPLE-USER"
+
+[[replacements]]
+path = "/records/1/id"
+with = "EXAMPLE-USER"

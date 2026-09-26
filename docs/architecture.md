@@ -53,6 +53,8 @@ it is relevant to the behavior being tested, particularly Unicode bugs.
 - Explicit replacements are applied together, before reduction.
 - Related IDs can receive the same replacement declared at multiple paths.
   The first version does not infer relationships or personal data.
+- A protected string value must not remain, even as a substring of another
+  JSON string. If it does, users must mark each occurrence for replacement.
 - The command receives the candidate path as a separate argument.
 - Output: a reduced candidate, a test recipe and a report without original values.
 - First supported environment: Linux; macOS follows process-control validation.
@@ -96,6 +98,12 @@ bundle ready to share. There is no fallback that exports the original.
 Repeated observations of the same failure provide a basic instability check,
 not a guarantee of determinism.
 
+The optional review bundle contains `candidate.json`, `report.json`, and
+`recipe.json`. It excludes original protected values, logs, environment data,
+and the replacement table. The recipe identifies the adapter but does not make
+the bundle self-contained; a reviewer must inspect the adapter arguments and
+undeclared fields before sharing it.
+
 ## Reduction and data integrity
 
 Start with structural delta debugging: remove groups of array elements and
@@ -110,12 +118,12 @@ Do not simplify strings or numbers in the first version. Each attempted
 transformation must decrease candidate size. The report indicates whether the
 budget was exhausted; it does not promise the smallest possible example.
 
-Preserve key order and number representation using the appropriate `serde_json`
-features. Explicitly reject duplicate keys: silently converting them into a map
-could erase the bug condition. Verify that initial serialization still reproduces
-the failure. Bugs depending on whitespace, escapes or the original lexical
-representation are outside the initial structural scope and must be reported
-as incompatible.
+Preserve key order and exact numeric values using the appropriate `serde_json`
+features. Serialization may normalize number spelling, whitespace and escapes;
+bugs depending on those lexical details are outside the initial structural scope
+and must be reported as incompatible. Explicitly reject duplicate object keys:
+silently converting them into a map could erase the bug condition. Verify that
+initial serialization still reproduces the failure.
 
 ## Execution limits and confidentiality
 
@@ -150,8 +158,8 @@ tests/
 ```
 
 Create modules as the first workflow requires them, without a plugin framework
-or a multi-package workspace at this stage. The existing `Cargo.toml` and
-`src/main.rs` still contain the `idk7` scaffold and were not changed by this decision.
+or additional Cargo packages at this stage. The existing root `ghostcase`
+package owns the CLI and core implementation.
 
 ## First milestone and acceptance criteria
 

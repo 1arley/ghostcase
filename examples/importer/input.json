@@ -1,0 +1,14 @@
+{
+  "source": "customer-export",
+  "metadata": {
+    "account": "customer-account-secret",
+    "created_at": "2026-09-21T10:45:00Z",
+    "format": "legacy-v2"
+  },
+  "records": [
+    {"id": "customer-user-secret", "name": "Customer One", "email": "one@example.invalid", "unused": {"note": "private note"}},
+    {"id": "customer-user-secret", "name": "Customer Two", "email": "two@example.invalid", "unused": {"note": "another private note"}},
+    {"id": "other-user", "name": "Unrelated Record", "email": "other@example.invalid"}
+  ],
+  "unused_settings": {"retry_count": 8, "debug": true}
+}
