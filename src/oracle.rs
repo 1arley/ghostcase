@@ -84,13 +84,15 @@ pub fn run(
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    // A dedicated process group lets one kill signal reach the adapter and every
+    // descendant it spawns. Both supported platforms expose the same POSIX calls.
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
         command.process_group(0);
     }
-    #[cfg(not(target_os = "linux"))]
-    bail!("the oracle runner currently supports Linux only");
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    bail!("the oracle runner currently supports Linux and macOS only");
 
     let mut child = command.spawn().context("could not start oracle program")?;
     let stdout = child
@@ -179,7 +181,8 @@ fn read_limited(mut reader: impl Read, limit: usize, overflow: Arc<AtomicBool>) 
 
 #[cfg(unix)]
 fn terminate_process_group(id: u32) {
-    // SAFETY: a negative child PID targets only the process group we created for this run.
+    // SAFETY: a negative child PID targets only the process group we created for this
+    // run, and a leading minus never addresses the caller's own group.
     unsafe {
         libc::kill(-(id as libc::pid_t), libc::SIGKILL);
     }

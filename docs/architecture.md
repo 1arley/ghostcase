@@ -57,8 +57,9 @@ it is relevant to the behavior being tested, particularly Unicode bugs.
   JSON string. If it does, users must mark each occurrence for replacement.
 - The command receives the candidate path as a separate argument.
 - Output: a reduced candidate, a test recipe and a report without original values.
-- First supported environment: Linux; macOS follows process-control validation.
-  Windows requires equivalent subprocess handling and tests.
+- Supported environments: Linux and macOS. Both isolate each oracle run in its
+  own process group and are validated by the same CI matrix and integration
+  tests. Windows requires equivalent subprocess handling and tests.
 
 A recipe may depend on the user's project and installed tools. Therefore, the
 initial bundle must not be advertised as a self-contained reproducer.
@@ -134,6 +135,7 @@ initial serialization still reproduces the failure.
   the user's permissions. Container isolation is a later step.
 - Enforce a per-attempt timeout, a total execution budget and an output limit.
 - Terminate the process group on timeout; test child and grandchild processes too.
+  Linux and macOS share the same POSIX mechanism, so one test covers both.
 - The adapter must reset its own state between attempts.
 - Do not automatically copy the repository, environment, logs or original data
   into the sharing bundle.

@@ -8,13 +8,13 @@ one at a time. After every change, Ghostcase asks your local test adapter whethe
 the exact target failure still happens. Original inputs stay untouched; the
 sanitized output is written only to the new path you choose.
 
-Ghostcase is an early prototype. It supports structural JSON reduction on Linux.
-It does not detect sensitive fields automatically, guarantee anonymization, or
-make a self-contained reproducer from an arbitrary project.
+Ghostcase is an early prototype. It supports structural JSON reduction on Linux
+and macOS. It does not detect sensitive fields automatically, guarantee
+anonymization, or make a self-contained reproducer from an arbitrary project.
 
 ## Build
 
-Requires Rust and Cargo.
+Requires Rust and Cargo. The oracle runner supports Linux and macOS only.
 
 ```sh
 cargo build --release
@@ -116,12 +116,12 @@ limitations.
 ## Development status
 
 - [x] Rust CLI scaffold
-- [x] Linux oracle runner and strict JSON result protocol
+- [x] Linux and macOS oracle runner and strict JSON result protocol
 - [x] Explicit JSON Pointer replacements
 - [x] Deterministic, budgeted structural reduction
 - [x] Synthetic importer example
 - [x] Synthetic Unicode validation fixture
 - [x] Integration test suite
-- [x] Linux CI
+- [x] Linux and macOS CI
 - [x] Review-ready export bundle
-- [ ] macOS process-group support
+- [ ] Windows subprocess handling
