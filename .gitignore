@@ -41,3 +41,7 @@ logs/
 
 # graphify
 graphify-out/
+
+# Local agent tooling, not part of the project
+/.agents/
+skills-lock.json

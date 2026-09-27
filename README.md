@@ -34,7 +34,23 @@ cargo run --release -- minimize \
 The example contains duplicate protected IDs and unrelated data. The adapter
 reports a target failure only while duplicate IDs are present. Ghostcase should
 replace the IDs consistently, remove irrelevant data, and keep the duplicate
-record pair. Its JSON summary is printed to stdout.
+record pair. Its JSON summary is printed to stdout. The fields are:
+
+| Field | Meaning |
+| --- | --- |
+| `status` | `target_failure_preserved` only when the target failure survived every check. |
+| `executions` | Total adapter runs, including the fixed verification runs. |
+| `reduction_runs` | Adapter runs spent inside delta debugging. |
+| `original_bytes` / `output_bytes` | Size of the input file and of the written candidate. |
+| `delta_bytes` | Signed `output_bytes - original_bytes`. Negative means smaller. |
+| `smaller_than_input` | Whether the candidate actually beat the input. |
+| `budget_exhausted` | Reduction stopped at `max_runs` and may not be minimal. |
+| `untestable_candidates` | Candidates the adapter could not evaluate. Skipped, never kept. |
+
+`delta_bytes` is signed on purpose. Reduction guarantees the *data* shrinks
+monotonically, but the candidate is written pretty-printed, so a compact input
+that was already minimal can still produce a larger file. Ghostcase reports that
+and warns on stderr rather than hiding it behind a clamped `removed_bytes`.
 
 To inspect the result:
 
@@ -88,9 +104,33 @@ with = "EXAMPLE-USER"
 
 Paths use JSON Pointer (RFC 6901). Point the same replacement value at each
 location that shares an identifier or another protected value. Ghostcase does
-not infer relationships between fields. Before exporting, it also checks that
-protected string values do not appear inside other JSON strings. If the same
-protected value occurs elsewhere, declare and replace each occurrence first.
+not infer relationships between fields.
+
+### How a protected value is detected
+
+Each replacement accepts an optional `match` rule:
+
+| `match` | Behavior |
+| --- | --- |
+| `exact` (default) | A protected **string** must not survive as the same whole string anywhere in the candidate. If it does, declare and replace each occurrence. |
+| `contains` | The stricter rule for real secrets: the value must also not appear inside a longer string or as an object key. |
+
+Non-string protected values are only checked at the location you declared. A bare
+number or boolean identifies nobody, so matching it across the whole document
+would reject ordinary data — use `match = "contains"` when a numeric value is
+itself sensitive and must not survive anywhere.
+
+Substring scanning is opt-in for a reason. With it enabled by default, protecting
+`user-1` also matches the unrelated `user-10`, `user-100` and `user-1198`, and the
+run stops with no way to resolve it. The default rule compares whole strings, so
+sequential identifiers and prefixed names work as expected.
+
+```toml
+[[replacements]]
+path = "/customer/email"
+with = "user@example.com"
+match = "contains"
+```
 
 The adapter receives the candidate path wherever `{input}` appears in its
 argument list. It must print one JSON object and exit successfully:
@@ -105,6 +145,14 @@ nonzero exit code, malformed response, timeout or output limit is an execution
 error; Ghostcase will not count it as a reproduced bug. Keep adapters
 deterministic and reset their state on every invocation.
 
+An execution error is fatal while Ghostcase is **verifying** — on the original
+input, after replacement, and on the final candidate. During **reduction** it is
+not: reduction removes the very fields an adapter reads, so a candidate the
+adapter cannot evaluate is expected. Such a candidate is skipped, never
+accepted, and delta debugging narrows down the part of the document responsible.
+Ghostcase reports how many were skipped and warns on stderr, so make adapters
+answer `invalid_candidate` instead of raising.
+
 Run the adapter as trusted local code. It inherits your filesystem and network
 permissions; Ghostcase's temporary directory is not a security sandbox. Review
 the final candidate and test recipe before sharing them. Protected values at
@@ -118,10 +166,20 @@ limitations.
 - [x] Rust CLI scaffold
 - [x] Linux and macOS oracle runner and strict JSON result protocol
 - [x] Explicit JSON Pointer replacements
-- [x] Deterministic, budgeted structural reduction
+- [x] Deterministic, budgeted structural reduction by delta debugging
 - [x] Synthetic importer example
 - [x] Synthetic Unicode validation fixture
 - [x] Integration test suite
+- [x] Unit tests for the JSON parser, protection rules and reducer
 - [x] Linux and macOS CI
 - [x] Review-ready export bundle
+- [x] Release workflow publishing Linux and macOS binaries
 - [ ] Windows subprocess handling
+- [ ] Validation against real-world bugs
+
+## Not yet validated
+
+The two fixtures are synthetic and deliberately small: a ten-line Python adapter
+that checks for duplicate identifiers. The workflow has not been exercised
+against real bugs yet, so treat the reduction quality and the adapter contract as
+unproven on anything but a well-behaved adapter.

@@ -117,12 +117,16 @@ pub fn run(
             let _ = child.wait();
             break None;
         }
-        if let Some(status) = child
-            .try_wait()
-            .context("could not inspect oracle process")?
-        {
-            terminate_process_group(child.id());
-            break Some(status);
+        match exit_state(&mut child)? {
+            ExitState::Exited => {
+                terminate_process_group(child.id());
+                break Some(child.wait().context("could not collect oracle result")?);
+            }
+            ExitState::Reaped(status) => {
+                terminate_process_group(child.id());
+                break Some(status);
+            }
+            ExitState::Running => {}
         }
         if Instant::now() >= deadline {
             terminate_process_group(child.id());
@@ -158,6 +162,59 @@ pub fn run(
         ProtocolResult::TargetFailure { .. } => Ok(Outcome::WrongTarget),
         ProtocolResult::NotReproduced => Ok(Outcome::NotReproduced),
         ProtocolResult::InvalidCandidate => Ok(Outcome::InvalidCandidate),
+    }
+}
+
+enum ExitState {
+    /// The process finished but has not been reaped yet.
+    Exited,
+    /// The process finished and was already reaped, carrying its exit status.
+    Reaped(std::process::ExitStatus),
+    Running,
+}
+
+/// Reports whether the adapter has finished while leaving it unreaped.
+///
+/// An unreaped child keeps its PID reserved, so the process group it leads cannot
+/// be recycled and the negative-PID kill below stays confined to this run. Where
+/// `waitid` is unavailable the status is reaped directly, which is correct but
+/// leaves that narrow window open.
+fn exit_state(child: &mut std::process::Child) -> Result<ExitState> {
+    #[cfg(unix)]
+    match has_exited_without_reaping(child.id()) {
+        Some(true) => return Ok(ExitState::Exited),
+        Some(false) => return Ok(ExitState::Running),
+        None => {}
+    }
+    Ok(
+        match child
+            .try_wait()
+            .context("could not inspect oracle process")?
+        {
+            Some(status) => ExitState::Reaped(status),
+            None => ExitState::Running,
+        },
+    )
+}
+
+#[cfg(unix)]
+fn has_exited_without_reaping(id: u32) -> Option<bool> {
+    let mut info = unsafe { std::mem::zeroed::<libc::siginfo_t>() };
+    // SAFETY: `info` is a live, correctly sized siginfo_t that waitid may fill.
+    // WNOWAIT leaves the child waitable, so Child::wait still collects it later.
+    let result = unsafe {
+        libc::waitid(
+            libc::P_PID,
+            id as libc::id_t,
+            &mut info,
+            libc::WEXITED | libc::WNOWAIT | libc::WNOHANG,
+        )
+    };
+    if result == 0 {
+        // SAFETY: waitid reported a state change, so the siginfo_t is initialized.
+        Some(unsafe { info.si_pid() } != 0)
+    } else {
+        None
     }
 }
 

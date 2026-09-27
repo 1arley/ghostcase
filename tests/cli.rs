@@ -41,6 +41,25 @@ struct Replacement {
     path: String,
     #[serde(rename = "with")]
     value: Value,
+    /// Omitted by default so the common configuration stays minimal; `contains`
+    /// opts into the strict substring rule.
+    #[serde(rename = "match", skip_serializing_if = "Option::is_none")]
+    match_mode: Option<&'static str>,
+}
+
+impl Replacement {
+    fn new(path: &str, value: Value) -> Self {
+        Self {
+            path: path.to_owned(),
+            value,
+            match_mode: None,
+        }
+    }
+
+    fn matching_anywhere(mut self) -> Self {
+        self.match_mode = Some("contains");
+        self
+    }
 }
 
 struct Invocation {
@@ -62,10 +81,7 @@ fn config() -> Config {
         },
         replacements: ["/records/0/id", "/records/1/id"]
             .into_iter()
-            .map(|path| Replacement {
-                path: path.to_owned(),
-                value: json!("EXAMPLE-USER"),
-            })
+            .map(|path| Replacement::new(path, json!("EXAMPLE-USER")))
             .collect(),
     }
 }
@@ -258,7 +274,13 @@ fn refuses_to_export_when_a_protected_value_remains_in_another_string() {
         "customer-export",
         "archive-customer-user-secret-customer-export",
     );
-    let invocation = invoke(&input, &config());
+    let mut configuration = config();
+    // The strict substring rule is opt-in, so declare it.
+    for replacement in &mut configuration.replacements {
+        *replacement =
+            std::mem::replace(replacement, Replacement::new("", json!("x"))).matching_anywhere();
+    }
+    let invocation = invoke(&input, &configuration);
 
     assert!(!invocation.result.status.success());
     assert!(
@@ -266,6 +288,154 @@ fn refuses_to_export_when_a_protected_value_remains_in_another_string() {
             .contains("a protected original value remains in the candidate")
     );
     assert!(!invocation.output_path.exists());
+}
+
+#[test]
+fn exact_mode_does_not_reject_an_unrelated_prefix_overlapping_identifier() {
+    // Protecting `user-1` must not be read as leaking into the unrelated `user-10`.
+    // Substring matching made Ghostcase unusable on sequential identifiers.
+    let input = r#"{"records":[{"id":"user-1"},{"id":"user-1"},{"id":"user-10"}]}"#;
+    let mut configuration = config();
+    configuration.replacements = ["/records/0/id", "/records/1/id"]
+        .into_iter()
+        .map(|path| Replacement::new(path, json!("EXAMPLE-USER")))
+        .collect();
+
+    let invocation = invoke(input, &configuration);
+
+    assert!(
+        invocation.result.status.success(),
+        "stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&invocation.result.stdout),
+        String::from_utf8_lossy(&invocation.result.stderr)
+    );
+    let candidate: Value =
+        serde_json::from_slice(&fs::read(&invocation.output_path).expect("candidate"))
+            .expect("valid candidate");
+    let ids: Vec<&str> = candidate["records"]
+        .as_array()
+        .expect("records")
+        .iter()
+        .map(|record| record["id"].as_str().expect("id"))
+        .collect();
+    assert_eq!(ids, ["EXAMPLE-USER", "EXAMPLE-USER"]);
+    // The unrelated identifier survives; only the protected one was replaced.
+    assert!(!candidate.to_string().contains("user-1"));
+}
+
+#[test]
+fn keeps_reducing_when_the_adapter_raises_on_a_reduced_candidate() {
+    // Reduction removes the fields the adapter reads, so an adapter that raises
+    // instead of answering used to abort the whole run. Such a candidate is now
+    // skipped, never accepted, and the reduction still succeeds.
+    let mut configuration = config();
+    configuration.oracle.args = vec![
+        "-c".to_owned(),
+        "import json,sys\nd=json.load(open(sys.argv[1]))\ntry:\n ids=[r['id'] for r in d['records']]\nexcept (KeyError,TypeError):\n raise SystemExit(3)\nprint(json.dumps({'outcome':'target_failure','target':'import-duplicate-id'} if len(ids)!=len(set(ids)) else {'outcome':'not_reproduced'}))"
+            .to_owned(),
+        "{input}".to_owned(),
+    ];
+
+    let invocation = invoke(INPUT, &configuration);
+
+    assert!(
+        invocation.result.status.success(),
+        "the run must survive a raising adapter, stderr: {}",
+        String::from_utf8_lossy(&invocation.result.stderr)
+    );
+    let report: Value = serde_json::from_slice(&invocation.result.stdout).expect("JSON report");
+    assert_eq!(report["status"], "target_failure_preserved");
+    assert!(
+        report["untestable_candidates"].as_u64().expect("count") > 0,
+        "the fixture must produce untestable candidates"
+    );
+    // The final candidate is still a valid, minimized reproduction.
+    let candidate: Value =
+        serde_json::from_slice(&fs::read(&invocation.output_path).expect("candidate"))
+            .expect("valid candidate");
+    assert_eq!(
+        candidate,
+        json!({
+            "records": [
+                {"id": "EXAMPLE-USER"},
+                {"id": "EXAMPLE-USER"}
+            ]
+        })
+    );
+    // A raising adapter is worth telling the user about.
+    let stderr = String::from_utf8_lossy(&invocation.result.stderr);
+    assert!(
+        stderr.contains("could not be evaluated by the adapter"),
+        "stderr: {stderr}"
+    );
+}
+
+#[test]
+fn still_refuses_to_start_when_the_adapter_raises_on_the_original() {
+    // Skipping applies to reduction only. A broken adapter must not be able to
+    // produce a bundle from an input it could never evaluate.
+    let mut configuration = config();
+    configuration.oracle.args = vec![
+        "-c".to_owned(),
+        "raise SystemExit(3)".to_owned(),
+        "{input}".to_owned(),
+    ];
+    let invocation = invoke_with_export(INPUT, &configuration);
+
+    assert!(!invocation.result.status.success());
+    assert!(
+        String::from_utf8_lossy(&invocation.result.stderr).contains("oracle exited unsuccessfully")
+    );
+    assert!(!invocation.output_path.exists());
+    assert!(!invocation.export_path.expect("export directory").exists());
+}
+
+#[test]
+fn reports_a_signed_size_change_when_the_candidate_is_not_smaller() {
+    // The oracle only reproduces while a marker key survives, so nothing can be
+    // removed and pretty-printing alone can outweigh a compact input. That must
+    // be reported honestly rather than hidden behind a saturating subtraction.
+    let input = r#"{"keep":1,"records":[{"id":"u-a"},{"id":"u-a"}]}"#;
+    let mut configuration = config();
+    // Reproduces only while the marker key survives *and* the ids still collide,
+    // so nothing in the document can be removed.
+    configuration.oracle.args = vec![
+        "-c".to_owned(),
+        "import json,sys\nd=json.load(open(sys.argv[1]))\nif 'keep' not in d:\n print(json.dumps({'outcome':'not_reproduced'}))\nelse:\n try:\n  ids=[r['id'] for r in d['records']]\n except (KeyError,TypeError):\n  print(json.dumps({'outcome':'invalid_candidate'}))\n else:\n  print(json.dumps({'outcome':'target_failure','target':'import-duplicate-id'} if len(ids)!=len(set(ids)) else {'outcome':'not_reproduced'}))"
+            .to_owned(),
+        "{input}".to_owned(),
+    ];
+    let configuration = {
+        let mut configuration = configuration;
+        configuration.replacements = ["/records/0/id", "/records/1/id"]
+            .into_iter()
+            .map(|path| Replacement::new(path, json!("SAFE")))
+            .collect();
+        configuration
+    };
+
+    let invocation = invoke(input, &configuration);
+    assert!(
+        invocation.result.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&invocation.result.stderr)
+    );
+
+    let report: Value = serde_json::from_slice(&invocation.result.stdout).expect("JSON report");
+    let delta = report["delta_bytes"].as_i64().expect("signed delta");
+    let original = report["original_bytes"].as_u64().expect("original");
+    let output = report["output_bytes"].as_u64().expect("output");
+    assert_eq!(delta, output as i64 - original as i64);
+    assert_eq!(report["smaller_than_input"], delta < 0);
+    // The candidate is genuinely not smaller here, and the report must say so.
+    assert!(delta > 0, "expected growth, got {delta}");
+    assert_eq!(report["smaller_than_input"], false);
+    // And the user is told, rather than left to trust a `removed_bytes: 0`.
+    let stderr = String::from_utf8_lossy(&invocation.result.stderr);
+    assert!(
+        stderr.contains("the candidate is not smaller than the input"),
+        "stderr: {stderr}"
+    );
 }
 
 #[test]

@@ -23,12 +23,30 @@ pub struct OracleConfig {
     pub args: Vec<String>,
 }
 
+/// How Ghostcase looks for an original protected value in a candidate.
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum MatchMode {
+    /// The value must not survive as a complete JSON scalar. This is the default
+    /// because substring matching reports false positives on ordinary identifier
+    /// schemes: protecting `user-1` also matches the unrelated `user-10`.
+    #[default]
+    Exact,
+    /// The value must not survive even inside a longer string or as an object
+    /// key. Use this when the protected value is a real secret whose fragments
+    /// are themselves sensitive.
+    Contains,
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Replacement {
     pub path: String,
     #[serde(rename = "with")]
     pub with: Value,
+    /// Detection rule for the original value. Defaults to `exact`.
+    #[serde(default, rename = "match")]
+    pub match_mode: MatchMode,
 }
 
 fn default_max_runs() -> usize {

@@ -3,7 +3,7 @@ name = "ghostcase"
 version = "0.1.0"
 edition = "2024"
 description = "Minimize JSON bug reproductions while replacing protected data"
-license = "MIT OR Apache-2.0"
+license = "MIT"
 readme = "README.md"
 
 [dependencies]

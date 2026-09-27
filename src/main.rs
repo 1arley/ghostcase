@@ -50,10 +50,19 @@ struct Report<'a> {
     status: &'static str,
     target: &'a str,
     executions: usize,
+    /// Oracle runs spent inside delta debugging, as opposed to the fixed number
+    /// of verification runs.
+    reduction_runs: usize,
     original_bytes: usize,
     output_bytes: usize,
-    removed_bytes: usize,
+    /// Signed size change against the input file. Negative means the candidate is
+    /// smaller. A zero or positive value means reduction could not beat the input
+    /// as it was written, which is reported rather than hidden.
+    delta_bytes: i64,
+    smaller_than_input: bool,
     budget_exhausted: bool,
+    /// Candidates the adapter could not evaluate. They were skipped, never kept.
+    untestable_candidates: usize,
 }
 
 #[derive(Serialize)]
@@ -143,7 +152,10 @@ fn minimize(
             original != replacement.with,
             "a replacement must differ from its original value"
         );
-        protected.push(original);
+        protected.push(json::Protected::with_mode(
+            original,
+            replacement.match_mode == config::MatchMode::Contains,
+        ));
     }
 
     let mut oracle = oracle::new(&config.oracle, config_path)?;
@@ -169,7 +181,7 @@ fn minimize(
         *value = replacement.with.clone();
     }
     anyhow::ensure!(
-        !json::contains_any(&document, &protected),
+        !json::contains_protected(&document, &protected),
         "a protected original value remains in the candidate; review the declared JSON Pointers"
     );
 
@@ -181,19 +193,35 @@ fn minimize(
         &mut executions,
     )?;
 
+    let mut last_oracle_error: Option<String> = None;
     let reduction = reduce::minimize(
         &mut document,
-        &protected,
         config.max_runs.saturating_sub(executions + 1),
-        |candidate| {
-            let outcome = oracle::run(
-                &mut oracle,
-                candidate,
-                &config.target,
-                config.timeout_seconds,
-            )?;
-            executions += 1;
-            Ok(outcome == oracle::Outcome::TargetFailure)
+        |candidate| match oracle::run(
+            &mut oracle,
+            candidate,
+            &config.target,
+            config.timeout_seconds,
+        ) {
+            Ok(oracle::Outcome::TargetFailure) => {
+                executions += 1;
+                Ok(reduce::Test::Preserved)
+            }
+            // A clean protocol answer is a verdict: the candidate is valid and the
+            // failure is gone.
+            Ok(_) => {
+                executions += 1;
+                Ok(reduce::Test::NotPreserved)
+            }
+            // The adapter could not evaluate this candidate. That is not a
+            // reproduction, but it is also not a reason to throw away the run:
+            // the candidate is skipped and delta debugging narrows down the part
+            // of the document the adapter cannot handle.
+            Err(error) => {
+                executions += 1;
+                last_oracle_error = Some(format!("{error:#}"));
+                Ok(reduce::Test::Incompatible)
+            }
         },
     )?;
 
@@ -205,21 +233,50 @@ fn minimize(
         &mut executions,
     )?;
     anyhow::ensure!(
-        !json::contains_any(&document, &protected),
+        !json::contains_protected(&document, &protected),
         "a protected original value remains in the final candidate"
     );
 
+    // Every accepted step already shed bytes, so this only reflects how the
+    // candidate is written. Output stays pretty-printed because a review bundle
+    // is read by people; the report then states the real signed delta against the
+    // input file instead of saturating a subtraction at zero.
     let output_bytes =
         serde_json::to_vec_pretty(&document).context("could not serialize candidate")?;
+    let delta_bytes = output_bytes.len() as i64 - original_size as i64;
+    let smaller_than_input = delta_bytes < 0;
     let report = Report {
         status: "target_failure_preserved",
         target: &config.target,
         executions,
+        reduction_runs: reduction.attempts,
         original_bytes: original_size,
         output_bytes: output_bytes.len(),
-        removed_bytes: original_size.saturating_sub(output_bytes.len()),
+        delta_bytes,
+        smaller_than_input,
         budget_exhausted: reduction.budget_exhausted,
+        untestable_candidates: reduction.untestable,
     };
+
+    if reduction.untestable > 0 {
+        eprintln!(
+            "ghostcase: warning: {} candidate(s) could not be evaluated by the \
+             adapter and were skipped, never accepted. Make the adapter answer \
+             {{\"outcome\":\"invalid_candidate\"}} instead of raising, so reduction can \
+             work around it. Last error: {}",
+            reduction.untestable,
+            last_oracle_error.as_deref().unwrap_or("unknown")
+        );
+    }
+    if !smaller_than_input {
+        eprintln!(
+            "ghostcase: warning: the candidate is not smaller than the input \
+             (input {original_size} bytes, candidate {} bytes). The target failure was \
+             preserved, but reduction could not beat the input as it was written; check \
+             whether the input was already minimal or formatted differently.",
+            output_bytes.len()
+        );
+    }
 
     write_candidate(output_path, &output_bytes)?;
     if let Some(export_dir) = export_dir
@@ -264,7 +321,7 @@ fn write_bundle(
     candidate_bytes: &[u8],
     report: &Report<'_>,
     config: &config::Config,
-    protected: &[serde_json::Value],
+    protected: &[json::Protected],
 ) -> Result<()> {
     anyhow::ensure!(
         !export_dir.exists(),
@@ -286,7 +343,7 @@ fn write_bundle_files(
     candidate_bytes: &[u8],
     report: &Report<'_>,
     config: &config::Config,
-    protected: &[serde_json::Value],
+    protected: &[json::Protected],
 ) -> Result<()> {
     let recipe = Recipe {
         target: &config.target,
@@ -303,14 +360,17 @@ fn write_bundle_files(
         serde_json::from_slice(&recipe_bytes).context("could not validate recipe")?;
     let report_value: serde_json::Value =
         serde_json::from_slice(&report_bytes).context("could not validate report")?;
+    // This bundle is Ghostcase's own output, so the strict rule always applies
+    // here regardless of the per-replacement mode: a false positive would only
+    // block a bundle that is already safe to write.
     let protected_text: Vec<_> = protected
         .iter()
-        .filter(|value| value.is_string())
-        .cloned()
+        .filter(|item| item.value.is_string())
+        .map(|item| json::Protected::strict(item.value.clone()))
         .collect();
     anyhow::ensure!(
-        !json::contains_any(&recipe_value, &protected_text)
-            && !json::contains_any(&report_value, &protected_text),
+        !json::contains_protected(&recipe_value, &protected_text)
+            && !json::contains_protected(&report_value, &protected_text),
         "the review bundle would contain a protected original value"
     );
 
