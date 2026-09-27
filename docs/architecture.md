@@ -243,7 +243,9 @@ than publish savings percentages.
 - Consider agent and GitHub Actions integrations after the CLI works.
 
 The license is MIT, in `LICENSE`. The dual `MIT OR Apache-2.0` declaration was
-narrowed to match that file; set the copyright holder before publishing.
+narrowed to match that file. `LICENSE` currently carries the generic
+`Ghostcase contributors` holder; replace it with the real holder before
+publishing.
 
 ## References
 
