@@ -79,6 +79,9 @@ already exist, and the candidate is still written to `--output`.
 
 A second synthetic fixture covers canonically equivalent Unicode identifiers;
 see [`examples/unicode-id-collision/README.md`](examples/unicode-id-collision/README.md).
+A third one models a bug that only a *conjunction* of two filters reproduces,
+and its adapter reports a second, different failure on purpose; see
+[`examples/search-filter-overlap/README.md`](examples/search-filter-overlap/README.md).
 
 ## Configure an adapter
 
@@ -169,6 +172,7 @@ limitations.
 - [x] Deterministic, budgeted structural reduction by delta debugging
 - [x] Synthetic importer example
 - [x] Synthetic Unicode validation fixture
+- [x] Synthetic conjunctive-filter fixture whose adapter reports a second failure
 - [x] Integration test suite
 - [x] Unit tests for the JSON parser, protection rules and reducer
 - [x] Linux and macOS CI
@@ -179,7 +183,8 @@ limitations.
 
 ## Not yet validated
 
-The two fixtures are synthetic and deliberately small: a ten-line Python adapter
-that checks for duplicate identifiers. The workflow has not been exercised
-against real bugs yet, so treat the reduction quality and the adapter contract as
-unproven on anything but a well-behaved adapter.
+The three fixtures are synthetic and deliberately small: a few dozen lines of
+Python each, checking duplicate identifiers, Unicode normalization and filter
+overlap. The workflow has not been exercised against real bugs yet, so treat the
+reduction quality and the adapter contract as unproven on anything but a
+well-behaved adapter.

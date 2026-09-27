@@ -50,3 +50,16 @@ jobs:
           test -s "$RUNNER_TEMP/ghostcase-unicode-review/candidate.json"
           test -s "$RUNNER_TEMP/ghostcase-unicode-review/report.json"
           test -s "$RUNNER_TEMP/ghostcase-unicode-review/recipe.json"
+      # The reduced shape is asserted in tests/cli.rs; this step only guards
+      # against a fixture that stops being runnable end to end.
+      - name: Run search filter example
+        run: |
+          cargo run --release -- minimize \
+            --input examples/search-filter-overlap/input.json \
+            --config examples/search-filter-overlap/ghostcase.toml \
+            --output "$RUNNER_TEMP/ghostcase-search.json" \
+            --export-dir "$RUNNER_TEMP/ghostcase-search-review"
+          test -s "$RUNNER_TEMP/ghostcase-search.json"
+          test -s "$RUNNER_TEMP/ghostcase-search-review/candidate.json"
+          test -s "$RUNNER_TEMP/ghostcase-search-review/report.json"
+          test -s "$RUNNER_TEMP/ghostcase-search-review/recipe.json"

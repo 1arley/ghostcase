@@ -153,6 +153,53 @@ fn run_invocation(
     }
 }
 
+/// Runs a fixture exactly as shipped: the real configuration and the real
+/// adapter from `examples/`, with artifacts written to a temporary directory.
+fn invoke_fixture(name: &str) -> Invocation {
+    let directory = tempfile::tempdir().expect("temporary test directory");
+    let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("examples")
+        .join(name);
+    let output_path = directory.path().join("minimized.json");
+    let export_path = directory.path().join("bundle");
+    run_invocation(
+        directory,
+        fixture.join("input.json"),
+        output_path,
+        fixture.join("ghostcase.toml"),
+        Some(export_path),
+    )
+}
+
+fn stdout_of(invocation: &Invocation) -> String {
+    String::from_utf8_lossy(&invocation.result.stdout).into_owned()
+}
+
+fn stderr_of(invocation: &Invocation) -> String {
+    String::from_utf8_lossy(&invocation.result.stderr).into_owned()
+}
+
+fn assert_success(invocation: &Invocation) {
+    assert!(
+        invocation.result.status.success(),
+        "stdout: {}\nstderr: {}",
+        stdout_of(invocation),
+        stderr_of(invocation)
+    );
+}
+
+fn read_bundle(invocation: &Invocation) -> String {
+    let export_dir = invocation.export_path.as_ref().expect("export directory");
+    let mut bundle = String::new();
+    for name in ["candidate.json", "report.json", "recipe.json"] {
+        let contents = fs::read(export_dir.join(name)).unwrap_or_else(|error| {
+            panic!("read {} from the bundle: {error}", name);
+        });
+        bundle.push_str(&String::from_utf8_lossy(&contents));
+    }
+    bundle
+}
+
 #[test]
 fn minimizes_the_input_while_preserving_the_target_failure() {
     let invocation = invoke(INPUT, &config());
@@ -579,4 +626,68 @@ fn preserves_exact_large_json_numbers_that_are_needed_to_reproduce_the_bug() {
     let candidate = fs::read_to_string(&invocation.output_path).expect("candidate JSON");
     assert!(candidate.contains(LARGE_NUMBER));
     assert!(candidate.starts_with(&format!("{{\n  \"sentinel\": {LARGE_NUMBER}")));
+}
+
+#[test]
+fn reduces_a_bug_that_only_a_conjunction_of_two_filters_reproduces() {
+    let invocation = invoke_fixture("search-filter-overlap");
+    assert_success(&invocation);
+
+    let report: Value = serde_json::from_slice(&invocation.result.stdout).expect("JSON report");
+    let candidate: Value =
+        serde_json::from_slice(&fs::read(&invocation.output_path).expect("sanitized candidate"))
+            .expect("valid candidate JSON");
+
+    assert_eq!(report["status"], "target_failure_preserved");
+    assert_eq!(report["target"], "search-filter-overlap");
+    assert_eq!(report["budget_exhausted"], false);
+    assert_eq!(report["untestable_candidates"], 0);
+    assert_eq!(report["smaller_than_input"], true);
+
+    // Only the two clauses on the same field remain, and the payloads the
+    // adapter never reads are gone. A single filter, or a pair on different
+    // fields, would mean the conjunction was lost.
+    assert_eq!(
+        candidate,
+        json!({
+            "request": {
+                "query": {
+                    "filters": [
+                        {"kind": "range", "field": "created_at"},
+                        {"kind": "terms", "field": "created_at"}
+                    ]
+                }
+            }
+        })
+    );
+}
+
+#[test]
+fn fixture_bundle_hides_a_secret_embedded_in_a_longer_string_and_a_numeric_one() {
+    let invocation = invoke_fixture("search-filter-overlap");
+    // The input carries `svc-account-joão-bot`, an unrelated identifier that
+    // merely starts with the protected actor name. Reaching a bundle at all
+    // proves the default `exact` rule did not report it as a false positive.
+    assert_success(&invocation);
+
+    let bundle = read_bundle(&invocation);
+    for protected in [
+        "acme-corp-tenant",
+        "svc-account-joão",
+        "4820117",
+        "trace-9f3a2b7c-secret",
+        // Declared with `match = "contains"`, so the fragment must not survive
+        // inside the longer `trace_note` string either.
+        "cursor-opaque-secret",
+    ] {
+        assert!(
+            !bundle.contains(protected),
+            "protected value survived in the review bundle: {protected}"
+        );
+    }
+
+    assert_eq!(
+        fs::read(&invocation.input_path).expect("original input"),
+        include_str!("../examples/search-filter-overlap/input.json").as_bytes()
+    );
 }

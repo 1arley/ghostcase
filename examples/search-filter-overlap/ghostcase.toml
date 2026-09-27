@@ -1,0 +1,41 @@
+target = "search-filter-overlap"
+max_runs = 300
+timeout_seconds = 10
+
+[oracle]
+program = "python3"
+args = ["oracle.py", "--input", "{input}"]
+
+[[replacements]]
+path = "/request/tenant_id"
+with = "EXAMPLE-TENANT"
+
+[[replacements]]
+path = "/request/actor"
+with = "EXAMPLE-ACTEUR"
+
+# A numeric account identifier is identifying, so the strict rule is required:
+# `exact` only guards the declared location, while `contains` scans the whole
+# document for the number.
+[[replacements]]
+path = "/request/account_id"
+with = 1
+match = "contains"
+
+[[replacements]]
+path = "/request/trace_id"
+with = "EXAMPLE-TRACE"
+match = "contains"
+
+# The cursor is also embedded in a longer string. The default `exact` rule
+# would let the fragment survive inside `/request/query/trace_note`, so this
+# value declares the strict rule and the second location is replaced too.
+[[replacements]]
+path = "/request/query/cursor"
+with = "EXAMPLE-CURSOR"
+match = "contains"
+
+[[replacements]]
+path = "/request/query/trace_note"
+with = "EXAMPLE-NOTE"
+match = "contains"

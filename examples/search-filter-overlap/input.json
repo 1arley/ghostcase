@@ -1,0 +1,45 @@
+{
+  "request": {
+    "tenant_id": "acme-corp-tenant",
+    "actor": "svc-account-joão",
+    "account_id": 4820117,
+    "trace_id": "trace-9f3a2b7c-secret",
+    "client": {
+      "name": "internal-console",
+      "version": "4.2.0",
+      "user_agent": "internal-console/4.2.0 (support@acme.example)"
+    },
+    "query": {
+      "text": "quarterly revenue report",
+      "limit": 50,
+      "offset": 200,
+      "cursor": "cursor-opaque-secret",
+      "trace_note": "retry after cursor-opaque-secret-7781 timed out",
+      "sort": [
+        {"field": "created_at", "direction": "desc"},
+        {"field": "amount", "direction": "asc"}
+      ],
+      "filters": [
+        {"kind": "range", "field": "created_at", "from": "2026-01-01T00:00:00Z", "to": "2026-09-01T00:00:00Z"},
+        {"kind": "terms", "field": "region", "values": ["emea", "apac", "amer"]},
+        {"kind": "terms", "field": "created_at", "values": ["2026-03-15", "2026-04-02", "2026-08-30"]},
+        {"kind": "range", "field": "amount", "from": 100, "to": 5000},
+        {"kind": "exists", "field": "owner_email"},
+        {"kind": "prefix", "field": "external_ref", "value": "EXT-7781"}
+      ],
+      "aggregations": {
+        "by_region": {"type": "terms", "field": "region", "size": 10},
+        "total_amount": {"type": "sum", "field": "amount"},
+        "oldest_record": {"type": "min", "field": "created_at"}
+      }
+    }
+  },
+  "context": {
+    "environment": "production",
+    "feature_flags": {"new_ranking": true, "beta_filters": false},
+    "audit": {
+      "requested_by": "svc-account-joão-bot",
+      "ticket": "OPS-4417"
+    }
+  }
+}
