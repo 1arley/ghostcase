@@ -1,0 +1,27 @@
+target = "jq-integer-precision-loss"
+max_runs = 500
+timeout_seconds = 10
+
+[oracle]
+program = "python3"
+args = ["oracle.py", "--input", "{input}"]
+
+[[replacements]]
+path = "/batch/id"
+with = "EXAMPLE-BATCH"
+match = "contains"
+
+[[replacements]]
+path = "/batch/merchant/contact_email"
+with = "financeiro@example.invalid"
+match = "contains"
+
+# A bank account number is a real secret: fragments stay sensitive.
+[[replacements]]
+path = "/batch/merchant/settlement_account"
+with = "EXAMPLE-ACCOUNT"
+match = "contains"
+
+[[replacements]]
+path = "/audit/requested_by"
+with = "EXAMPLE-SERVICE"

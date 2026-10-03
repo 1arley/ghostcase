@@ -83,6 +83,10 @@ A third one models a bug that only a *conjunction* of two filters reproduces,
 and its adapter reports a second, different failure on purpose; see
 [`examples/search-filter-overlap/README.md`](examples/search-filter-overlap/README.md).
 
+A fourth one is the real-world case: a reproducible precision bug in `jq` itself,
+reduced from a 3734-byte settlement batch to a 162-byte two-event reproducer.
+See [`examples/settlement-precision/README.md`](examples/settlement-precision/README.md).
+
 ## Configure an adapter
 
 Create a TOML file:
@@ -178,13 +182,20 @@ limitations.
 - [x] Linux and macOS CI
 - [x] Review-ready export bundle
 - [x] Release workflow publishing Linux and macOS binaries
+- [x] One validated real-world bug: reproducible `jq` precision loss
 - [ ] Windows subprocess handling
-- [ ] Validation against real-world bugs
+- [ ] Validation against real application bugs, not a real tool
 
 ## Not yet validated
 
-The three fixtures are synthetic and deliberately small: a few dozen lines of
-Python each, checking duplicate identifiers, Unicode normalization and filter
-overlap. The workflow has not been exercised against real bugs yet, so treat the
-reduction quality and the adapter contract as unproven on anything but a
-well-behaved adapter.
+Three fixtures are synthetic and deliberately small: a few dozen lines of Python
+each, checking duplicate identifiers, Unicode normalization and filter overlap.
+
+One fixture is a real defect: `jq` loses integer precision above 2**53 when it
+sums values, reproducible on jq 1.8.2, reduced from 3734 to 162 bytes. That
+validates the workflow against a real tool and a real bug. It does not validate
+the harder claim, which is reducing a bug in an application through its own
+test suite. The adapter there is still a purpose-written Python wrapper, and the
+reduced candidate is minimal only among the transformations Ghostcase attempts.
+
+Treat the reduction quality as unproven on anything but a well-behaved adapter.

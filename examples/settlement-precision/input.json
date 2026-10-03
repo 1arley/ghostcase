@@ -1,0 +1,56 @@
+{
+  "batch": {
+    "id": "stl-2026-09-30-secret",
+    "settlement_date": "2026-09-30",
+    "currency": "BRL",
+    "merchant": {
+      "id": 4410,
+      "name": "Acomex Varejo",
+      "contact_email": "financeiro@acomex.example",
+      "settlement_account": "BR97-0000-1234-5678-9012"
+    },
+    "fee_schedule": {"percent": "0.99", "fixed": "150"},
+    "generated_at": "2026-10-01T02:00:00Z"
+  },
+  "events": [
+    {"id": "evt-0001", "account": "acc-alpha", "amount": 1725884862351626139, "kind": "capture", "at": "2026-09-30T00:01:12Z", "note": "split capture"},
+    {"id": "evt-0002", "account": "acc-alpha", "amount": 1725884862351626140, "kind": "capture", "at": "2026-09-30T00:04:38Z", "note": "split capture"},
+    {"id": "evt-0003", "account": "acc-alpha", "amount": 250000, "kind": "fee", "at": "2026-09-30T00:04:40Z", "note": "fee adjustment"},
+    {"id": "evt-0004", "account": "acc-alpha", "amount": -1200, "kind": "refund", "at": "2026-09-30T01:12:03Z", "note": "partial refund"},
+
+    {"id": "evt-0005", "account": "acc-beta", "amount": 9007199254740993, "kind": "capture", "at": "2026-09-30T02:20:00Z", "note": "settlement"},
+    {"id": "evt-0006", "account": "acc-beta", "amount": 1, "kind": "fee", "at": "2026-09-30T02:20:05Z", "note": "rounding fee"},
+    {"id": "evt-0007", "account": "acc-beta", "amount": 4300, "kind": "refund", "at": "2026-09-30T03:00:00Z", "note": "refund"},
+
+    {"id": "evt-0008", "account": "acc-gamma", "amount": 812345678901234567, "kind": "capture", "at": "2026-09-30T04:11:00Z", "note": "bulk capture"},
+    {"id": "evt-0009", "account": "acc-gamma", "amount": 812345678901234568, "kind": "capture", "at": "2026-09-30T04:11:30Z", "note": "bulk capture"},
+    {"id": "evt-0010", "account": "acc-gamma", "amount": 812345678901234569, "kind": "capture", "at": "2026-09-30T04:12:00Z", "note": "bulk capture"},
+    {"id": "evt-0011", "account": "acc-gamma", "amount": 99, "kind": "fee", "at": "2026-09-30T04:12:10Z", "note": "fee"},
+
+    {"id": "evt-0012", "account": "acc-delta", "amount": 100, "kind": "capture", "at": "2026-09-30T05:00:00Z", "note": "small"},
+    {"id": "evt-0013", "account": "acc-delta", "amount": 250, "kind": "capture", "at": "2026-09-30T05:01:00Z", "note": "small"},
+    {"id": "evt-0014", "account": "acc-delta", "amount": 75, "kind": "refund", "at": "2026-09-30T05:02:00Z", "note": "small refund"},
+
+    {"id": "evt-0015", "account": "acc-epsilon", "amount": -1, "kind": "fee", "at": "2026-09-30T06:30:00Z", "note": "chargeback fee"},
+    {"id": "evt-0016", "account": "acc-epsilon", "amount": 9007199254740991, "kind": "capture", "at": "2026-09-30T06:31:00Z", "note": "largest double"},
+    {"id": "evt-0017", "account": "acc-epsilon", "amount": 9007199254740993, "kind": "capture", "at": "2026-09-30T06:32:00Z", "note": "beyond largest double"},
+
+    {"id": "evt-0018", "account": "acc-zeta", "amount": 4500, "kind": "capture", "at": "2026-09-30T07:45:00Z", "note": "ordinary"},
+    {"id": "evt-0019", "account": "acc-zeta", "amount": 4500, "kind": "capture", "at": "2026-09-30T07:46:00Z", "note": "ordinary"},
+    {"id": "evt-0020", "account": "acc-zeta", "amount": 4500, "kind": "capture", "at": "2026-09-30T07:47:00Z", "note": "ordinary"}
+  ],
+  "audit": {
+    "requested_by": "svc-account-joão-bot",
+    "ticket": "FIN-2281",
+    "channel": "batch-scheduler"
+  },
+  "context": {
+    "region": "sa-east",
+    "feature_flags": {"new_settlement": true, "delta_totals": false},
+    "logs": [
+      {"at": "2026-10-01T02:00:01Z", "level": "info", "message": "batch loaded"},
+      {"at": "2026-10-01T02:00:03Z", "level": "info", "message": "totals computed"},
+      {"at": "2026-10-01T02:00:04Z", "level": "warn", "message": "totals differ from ledger"}
+    ]
+  }
+}

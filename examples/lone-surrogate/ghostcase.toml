@@ -1,0 +1,32 @@
+target = "lone-surrogate-utf8"
+max_runs = 500
+timeout_seconds = 10
+
+[oracle]
+program = "python3"
+args = ["oracle.py", "--input", "{input}"]
+
+[[replacements]]
+path = "/tenant_id"
+with = "EXAMPLE-TENANT"
+
+# A webhook signature is a real secret: its fragments stay sensitive, so the
+# strict rule applies.
+[[replacements]]
+path = "/delivery/signature"
+with = "EXAMPLE-SIGNATURE"
+match = "contains"
+
+[[replacements]]
+path = "/payload/order/customer/email"
+with = "customer@example.invalid"
+match = "contains"
+
+[[replacements]]
+path = "/payload/order/shipping/tracking"
+with = "EXAMPLE-TRACKING"
+match = "contains"
+
+[[replacements]]
+path = "/payload/audit/requested_by"
+with = "EXAMPLE-SERVICE"

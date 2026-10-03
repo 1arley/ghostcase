@@ -233,6 +233,28 @@ before and after, execution count, total time and configuration effort. The
 initial goal is to prove the workflow's usefulness and correctness, rather
 than publish savings percentages.
 
+### Validation log
+
+| Bug | Kind | Result |
+| --- | --- | --- |
+| Duplicate identifier import | Synthetic | Pass |
+| Unicode ID normalization | Synthetic | Pass |
+| Filter clause overlap | Synthetic | Pass |
+| `jq` integer precision loss | Real, jq 1.8.2 | Pass: 3734 → 162 bytes, 54 executions, ~3.6 s, 9 lines of configuration |
+
+One real bug is validated, and it is a bug in a *tool* rather than in an
+application. The harder case remains open: pointing the adapter at a real
+project's own test suite rather than at a purpose-written wrapper.
+
+A candidate real bug was also rejected as out of scope, which is a result worth
+recording. `CVE-2026-33948` in jq is a validation bypass: jq truncates input at
+an embedded NUL byte and validates only the prefix. The reproducer cannot be
+expressed in valid JSON, and the strict parser correctly refuses it. The
+equivalent class, a lone surrogate escape such as `\ud83d`, is likewise invalid
+JSON per RFC 8259, so Ghostcase rejects the input rather than reducing it. Any
+bug that lives in the lexical layer of a document is invisible to this tool by
+construction.
+
 ## Future decisions
 
 - Package Linux and macOS binaries as each platform passes its tests. The release

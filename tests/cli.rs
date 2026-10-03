@@ -691,3 +691,87 @@ fn fixture_bundle_hides_a_secret_embedded_in_a_longer_string_and_a_numeric_one()
         include_str!("../examples/search-filter-overlap/input.json").as_bytes()
     );
 }
+
+/// Runs a fixture adapter directly against a candidate, to confirm the artifact
+/// Ghostcase wrote still reproduces on its own.
+fn ask_adapter(fixture: &str, candidate: &std::path::Path) -> Value {
+    let adapter = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("examples")
+        .join(fixture)
+        .join("oracle.py");
+    let output = Command::new("python3")
+        .arg(&adapter)
+        .arg("--input")
+        .arg(candidate)
+        .output()
+        .expect("run the fixture adapter");
+    serde_json::from_slice(&output.stdout).expect("adapter protocol response")
+}
+
+#[test]
+fn reduces_a_real_reproducible_jq_precision_bug() {
+    // The adapter runs the real jq binary, so a missing jq has to be a clear
+    // failure rather than a confusing protocol error.
+    Command::new("jq")
+        .arg("--version")
+        .output()
+        .expect("this test needs the jq binary on PATH");
+
+    let invocation = invoke_fixture("settlement-precision");
+    assert_success(&invocation);
+
+    let report: Value = serde_json::from_slice(&invocation.result.stdout).expect("JSON report");
+    let candidate: Value =
+        serde_json::from_slice(&fs::read(&invocation.output_path).expect("sanitized candidate"))
+            .expect("valid candidate JSON");
+
+    assert_eq!(report["status"], "target_failure_preserved");
+    assert_eq!(report["target"], "jq-integer-precision-loss");
+    assert_eq!(report["budget_exhausted"], false);
+    assert_eq!(report["smaller_than_input"], true);
+
+    // The exact values chosen depend on the jq version, so assert the
+    // invariants that make the candidate minimal rather than the numbers.
+    let events = candidate["events"].as_array().expect("an events array");
+    assert!(
+        events.len() >= 2,
+        "the bug needs a sum, so one event cannot reproduce it: {events:?}"
+    );
+    assert!(
+        events.iter().all(
+            |event| event.as_object().map(|object| object.len()) == Some(2)
+                && event["account"].is_string()
+                && event["amount"].is_i64()
+        ),
+        "each surviving event should keep only the account and the amount: {events:?}"
+    );
+    assert_eq!(
+        candidate.as_object().map(|object| object.len()),
+        Some(1),
+        "everything except the events array should be gone: {candidate}"
+    );
+
+    // The written artifact must reproduce on its own, not only through the run
+    // that produced it.
+    assert_eq!(
+        ask_adapter("settlement-precision", &invocation.output_path),
+        json!({"outcome": "target_failure", "target": "jq-integer-precision-loss"})
+    );
+
+    let bundle = read_bundle(&invocation);
+    for protected in [
+        "stl-2026-09-30-secret",
+        "financeiro@acomex.example",
+        "BR97-0000-1234-5678-9012",
+    ] {
+        assert!(
+            !bundle.contains(protected),
+            "protected value survived in the review bundle: {protected}"
+        );
+    }
+
+    assert_eq!(
+        fs::read(&invocation.input_path).expect("original input"),
+        include_str!("../examples/settlement-precision/input.json").as_bytes()
+    );
+}

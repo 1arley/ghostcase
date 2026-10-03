@@ -63,3 +63,17 @@ jobs:
           test -s "$RUNNER_TEMP/ghostcase-search-review/candidate.json"
           test -s "$RUNNER_TEMP/ghostcase-search-review/report.json"
           test -s "$RUNNER_TEMP/ghostcase-search-review/recipe.json"
+      # The settlement fixture runs the real jq binary through its adapter.
+      - name: Check jq is available
+        run: jq --version
+      - name: Run settlement precision example
+        run: |
+          cargo run --release -- minimize \
+            --input examples/settlement-precision/input.json \
+            --config examples/settlement-precision/ghostcase.toml \
+            --output "$RUNNER_TEMP/ghostcase-settlement.json" \
+            --export-dir "$RUNNER_TEMP/ghostcase-settlement-review"
+          test -s "$RUNNER_TEMP/ghostcase-settlement.json"
+          test -s "$RUNNER_TEMP/ghostcase-settlement-review/candidate.json"
+          test -s "$RUNNER_TEMP/ghostcase-settlement-review/report.json"
+          test -s "$RUNNER_TEMP/ghostcase-settlement-review/recipe.json"
